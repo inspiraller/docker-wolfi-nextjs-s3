@@ -1,0 +1,16 @@
+node_modules
+dist 
+Dockerfile
+**/node_modules
+**/npm-debug.log
+.secrets
+.gitignore
+.env
+.env-secret
+.vscode
+
+**/dist/*
+README.md
+shared
+.next
+scripts/healthcheck.template.sh

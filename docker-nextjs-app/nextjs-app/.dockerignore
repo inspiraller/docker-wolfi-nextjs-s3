@@ -1,0 +1,4 @@
+.gitignore
+eslint.config.mjs
+states
+build.sh

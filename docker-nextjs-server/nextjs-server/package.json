@@ -1,0 +1,24 @@
+{
+  "name": "docker-wolfi-nextjs-s3",
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [],
+  "license": "ISC",
+  "author": "Inspiraller Inspiraller <inspiraller.1@gmail.com> (https://github.com/inspiraller)",
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "esbuild": "^0.25.0",
+    "next": "^15.1.3",
+    "pm2": "^5.4.3"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0"
+  },
+  "main": "next-server.js",
+  "files": [
+    "next-server.js",
+    "package.json",
+    "package-lock.json",
+    "node_modules/"
+  ]
+}
