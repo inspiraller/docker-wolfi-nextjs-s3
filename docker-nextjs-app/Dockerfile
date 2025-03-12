@@ -8,7 +8,7 @@ USER root
 RUN mkdir -p ./node_modules && \
     chown -R node:node ./
 USER node
-COPY --chown=node:node ./nextjs-content/package*.json ./
+COPY --chown=node:node ./nextjs-app/package*.json ./
 
 RUN npm install
 
@@ -17,7 +17,7 @@ FROM cgr.dev/chainguard/node
 WORKDIR /usr/src/app
 
 COPY --from=build-deps --chown=node:node  /usr/src/app ./
-COPY --chown=node:node ./nextjs-content .
+COPY --chown=node:node ./nextjs-app .
 
 USER root
 RUN npm i typescript tsc -g

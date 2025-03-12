@@ -1,22 +1,14 @@
 #!/bin/sh
 
-
-# port=
-# for arg in "$@"; do
-#     case $arg in
-#         --port=*) port="${arg#*=}";; # Extract value after --port=
-#         *) ;; #echo "Unknown option: $arg"; exit 1;;
-#     esac
-# done
-
-if [[ -z "$PORT" ]]; then 
-  echo "Error: PORT is required"
-  exit 1
-fi
-
 log() {
   echo $1 >> /proc/1/fd/1
 }
+
+if [[ -z "$PORT" || -z $ROOT ]]; then 
+  log "Error: PORT, ROOT is required"
+  exit 1
+fi
+
 createFile() {
   echo $1 > $2
 }
@@ -30,8 +22,8 @@ getHealthLog() {
   log "healthcheck: test"
 
   # Constants
-  WDIR="/app"
-  SCRIPTS_DIR="${WDIR}/scripts"
+
+  SCRIPTS_DIR="${ROOT}/scripts"
   HEALTH_CHECK_FILE="$SCRIPTS_DIR/healthcheck-init"
 
   HEALTH_STATE_CREATED="Server initialized."

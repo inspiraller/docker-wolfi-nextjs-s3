@@ -4,7 +4,7 @@ set -a; source ../.env; set +a
 set -e
 
 echo -e "$BG_START Start: docker-nextjs-app/_create.sh $RESET"
-echo "Description: Creates dist/ 
+echo "Description: Creates nextjs-build/ 
   .next
   public
   states/
@@ -13,32 +13,33 @@ echo "Description: Creates dist/
   next.config.js
 "
 
-if [[ -z $CONTAINER_SHARED_PATH  ]]; then
-   echo "Must provide CONTAINER_SHARED_PATH from .env file"
+if [[ -z $NEXTJS_BUILD  ]]; then
+   echo "Must provide NEXTJS_BUILD from .env file"
    exit 1
 fi
 
-name=nextjs-bucket
-bucketPath="../$CONTAINER_SHARED_PATH" # generate at the root of this repo
+ROOT="/usr/src/app"
+name=$NEXTJS_BUILD
+buildPath="../$NEXTJS_BUILD" # generate relative host folder
 
 docker stop $name 2>/dev/null || true
 docker rm $name 2>/dev/null || true
 docker build . -t $name
 docker run --name $name -d $name
-rm -rf ${bucketPath}
-mkdir -p ${bucketPath}/states
+rm -rf ${buildPath}
+mkdir -p ${buildPath}/states
 
-docker cp $name:/usr/src/app/.next ${bucketPath}
-docker cp $name:/usr/src/app/public ${bucketPath}
+docker cp $name:$ROOT/.next ${buildPath}
+docker cp $name:$ROOT/public ${buildPath}
 
 # need this for nextjs image optimisation
-docker cp $name:/usr/src/app/imageLoader.js ${bucketPath}
-docker cp $name:/usr/src/app/next.config.js ${bucketPath}
+docker cp $name:$ROOT/imageLoader.js ${buildPath}
+docker cp $name:$ROOT/next.config.js ${buildPath}
 
 timestamp=$(date +%s000)
-echo $timestamp > ${bucketPath}/states/uploaded
+echo $timestamp > ${buildPath}/states/uploaded
 
-echo -e "$BG_END Finish: docker-nextjs-app.sh $RESET. Created ./$CONTAINER_SHARED_PATH with next build content"
+echo -e "$BG_END Finish: docker-nextjs-app.sh $RESET. Created ./$NEXTJS_BUILD with next build content"
 
 
 
