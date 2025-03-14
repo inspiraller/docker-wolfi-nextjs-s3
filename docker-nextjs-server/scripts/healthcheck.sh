@@ -1,37 +1,32 @@
 #!/bin/sh
 
-
-# port=
-# for arg in "$@"; do
-#     case $arg in
-#         --port=*) port="${arg#*=}";; # Extract value after --port=
-#         *) ;; #echo "Unknown option: $arg"; exit 1;;
-#     esac
-# done
-
-if [[ -z "$PORT" ]]; then 
-  echo "Error: PORT is required"
-  exit 1
-fi
-
-log() {
-  echo $1 >> /proc/1/fd/1
-}
-createFile() {
-  echo $1 > $2
-}
-
+# healthcheck.sh
 # This will check if the file: healthcheck-init exists.
 # If it does not exist, it will create the file and write the timestamp to it and send a logof "init" to Cloudwatch
 # If it does not exist, it will send a log of "still ok" vto Cloudwatch
 # We can subscripe to the Cloudwatch log to invoke a lambda in a ci chain on deployments or other services.
 
+
+log() {
+  echo $1 >> /proc/1/fd/1
+}
+
+if [[ -z "$PORT" || -z $ROOT ]]; then 
+  log "Error: PORT, ROOT is required"
+  exit 1
+fi
+
+createFile() {
+  echo $1 > $2
+}
+
+
 getHealthLog() {
   log "healthcheck: test"
 
   # Constants
-  WDIR="/app"
-  SCRIPTS_DIR="${WDIR}/scripts"
+
+  SCRIPTS_DIR="${ROOT}/scripts"
   HEALTH_CHECK_FILE="$SCRIPTS_DIR/healthcheck-init"
 
   HEALTH_STATE_CREATED="Server initialized."

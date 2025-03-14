@@ -1,3 +1,5 @@
 node_modules
 .env
 dist
+nextjs-build
+vlm_share

@@ -9,38 +9,32 @@ COPY nextjs-server/package.json nextjs-server/package-lock.json ./
 RUN npm ci --omit=dev && npm prune --production
 
 FROM cgr.dev/chainguard/wolfi-base
-ARG CONTAINER_SHARED_PATH
-ARG PORT
 ARG USER_ID
+ARG PORT
 
-ENV PORT=$PORT
-ENV CONTAINER_SHARED_PATH=$CONTAINER_SHARED_PATH
 ENV NODE_ENV="production"
+ENV PORT=$PORT
 
-# coreutils and glibc-conf for pm2 for clustering...
+ENV VLM_DIR=
+ENV BLGREEN_SYNCED=
+ENV BLGREEN_BUILD1=
+ENV BLGREEN_BUILD2=
+ENV ROOT= 
+ENV PM2_SERVER_NAME=
+
+
+# inotify-tools for watching /states/uploaded to trigger rebuild 
+# Note: This is problematic when used in Dockerfile. Currently using a poll, but in ec2 instance can use inotify-tools
 RUN apk update && apk add --no-cache \
  nodejs-20 npm shadow curl dumb-init && \
  rm -rf /var/cache/apk/*
 RUN groupadd -g $USER_ID node && useradd -m -u $USER_ID -g node -s /bin/sh node
 
-
-
-WORKDIR /app
-
+WORKDIR /app 
 
 RUN node --version
 
-# Why permissions 700?
-# ec2 is the root and therefore the owner so it has greater privilege, ie can write (7) to: /shared/.next
-# docker/ecs would not typically be the root, but since its a bind mount, it takes on same ids as the host, but may have its own 
-# naming conventions for those ids. the node user might be a different id.
-# So as long as we specify the USER_ID we can have the same root permissions as the ec2
-
-RUN \
- mkdir -p ./${CONTAINER_SHARED_PATH}/.next && \
-   chmod -R 700 ./${CONTAINER_SHARED_PATH} && \
-   chmod -R 700 ./${CONTAINER_SHARED_PATH}/.next && \
- mkdir -p ./scripts && \
+RUN mkdir -p ./scripts && \
    chown -R node:node ./scripts && \
    chmod -R 700 ./scripts
   

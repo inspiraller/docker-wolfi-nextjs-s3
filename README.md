@@ -1,28 +1,54 @@
-# What is this repo for?
-Small scale blue green deployment for nextjs server, that alternates between new folder and old folder on same ecs container.
+# What is this repo for? - Blue Green deployment for incremental updates
+This is part of a chain of steps to implement an incremental blue green deployment of nextjs content.
+
+## If we have the following setup:
+- vpn, subnets, security groups
+- ec2
+- Docker image push to ecr
+- Task definition configured to use Docker image
+- S3 which contain the content for latest nextjs build (not standalone. Can be standalone but this shows how to make it work with custom server)
+- S3 notification to triger Lambda 1 (lambda-listen-s3)
+- EFS mount
+  - sync folder
+  - build 1 folder
+  - build 2 folder
+- Lambda (lambda-listen-s3) 
+  - alternates blue green deployment build to either build 1 or build 2 and syncs to efs
+- Cloudwatch log group on ecs task
+- Cloudwatch log group subscription - triggers Lambda (healthcheck ok)
+- Lambda (healthcheck ok) 
+  - updates target group listener to new green deployment 
+  -  kills old service
+  - removes build file from efs
+- Route 53 - hosting zone - dns record - Load balancer dns name
+- Load balancer - target group pointing to ecs service
+
+## How blue greend deployment works with incremental changes?
+Existing ecs task uses build 1 folder for server content
+
+**On blue green deployment**:
+- Local computer - aws cli sync local nextjs build to s3
+- local computer - after sync cps file states/uploaded to trigger lambda
+- s3 notification - on file states/uploaded invokes lambda 1
+- Lambda 1 - syncs s3 to efs sync folder with only new updates
+- Cloudwatch log on efs triggers lambda 2 when it detects file states/uploaded
+- Lambda 2 - Update service with new task (to be green)
+- New ecs task - mounts to efs listens on sync folder for file /uploaded on first load only then copies sync to empty build folder: build 1 or build 2 (alternating blue green) then uses new build and starts server from it. (Ecs task is using Docker image to run in a suspended state with bash or node, to listen to updates in efs, and then start up server entirely, ie not having nextjs start up on initialisation)
+- Task def Healthcheck - As per standard new deployments. On healthcheck ok of new service, loadbalancer stops old ecs task, but in addition, removes data from old folder in efs build!
+- Cloudwatch - on healthcheck ok. Loadbalancer stops old ecs task (removing data from old folder in efs build)
 
 # How it would work with AWS?
-1. myComputer nextjs build --(s3 sync)--> s3
+1. myComputer script (or pipeline)
+- create nextjs-build 
+-  --(s3 sync)--> s3
+- --(s3 cp states/uploaded)--> s3
+
 2. S3 update --(Notification subscription)--> lambda listen s3
-3. Lambda listen s3 --(sms message)--> ec2 local script.sh 
-4. ec2 local script.sh --(s3 sync bucket )--> ec2/ecs shared volume
-5. inotifywait --(listen on file states/uploaded)--> alternate between new folder and old folder for blue green deployment
+3. Lambda listen s3 --(syncs s3)--> to efs inactive build folder and creates file build with reference to the new build folder.
+4. Cloudwatch --(listens on efs file - build) --> lambda healthcheck ok
+5. Lambda healthcheck ok --(Update listener desired tasks)--> start service
+6. This repo expects the file 'build' and a reference to the target build folder to start nextjs server
 
-# Aws services
-The usecase for this is running the following:
-- 1 ec2 instance (with AWS cli for s3 sync for pulling changes from s3 bucket to the shared volume)
-- 1 ecs service task
-(share volume between ec2 and ecs, using volume mount on task definition)
-- 1 s3 bucket
-- 1 notification subscription to lambda
-- 1 lambda (listen to s3)
-- Cloudwatch loggroups for debugging
-- Optional: Loadbalancer + EC2 Nat Instance 
-Note: If using loadbalancer then you need task definition network mode: AWSVPC which puts the ecs tasks into private subnet that can't access the internet, so you can't make external api calls unless you have a NAT instance or NAT gateway.
-
-# Larger scale deployments
-For larger scale, more capacity it is advisable instead to use separate ec2 instances. 
-One solution might be to alternate the dns record to point to the new ec2 instance load balancer, but that is outside the scope of this repo.
 
 # Dependencies on host:
 - Gitbash terminal
@@ -35,19 +61,18 @@ One solution might be to alternate the dns record to point to the new ec2 instan
 - shell
 - curl for healthcheck
 - shadow (for changing your user id to share with volume from container to host with explicit permissions using chmod/chown)
-- dumb-init (for running nodejs in entrypoint without npm. Part of the chainguard principles is to improve security)
+- dumb-init (for running nodejs in entrypoint without npm. Part of the Chainguard principles is to improve security)
 - pm2 for production, debugging and restarting
-- inotifywait
 - healthcheck
 - entrypoint for any custom functionality before the compose.yaml or task definition runs
-- nextjs build into /bucket 
+- Bind mount nextjs-build into /vlm_share/build[1 or 2]
   - public/
   - .next/
   - states/uploaded (for nodejs to listen when to start server)
   - next.config.js
   - imageLoader.js (
-     Traspiled from typescript to javascript file, so next.config.js can read it for 
-     for allowing image optimisation to work with nextjs for external api calls)
+     Transpiled from typescript to javascript file, so next.config.js can read it for 
+     for allowing image optimization to work with nextjs for external api calls)
 
 # Can you run this example without AWS? 
 Yes. This is just an architectural blueprint of the entire chain. You can test this locally without having to use any aws services.
@@ -55,20 +80,19 @@ Yes. This is just an architectural blueprint of the entire chain. You can test t
 # How to run this?
 1. `cp .env.example .env`
 - change .env to your desire
-2. `cd docker-nextjs-app && npx create-next-app --nextjs-app`
- Create your next production build (leaving: output mode blank - ie not standalone)
-3. Copy merge-with-nextjs-app-before-buildsh/* into your nextjs-app and modify accordingly
-- These files are merely to enable transpiling imageLoader.js for next.config.js to Image optimisation
+2. Create or edit docker-nextjs-app/nextjs-app
+3. Copy merge-with-nextjs-app-before-build/* into your nextjs-app and modify accordingly
+- These files are merely to enable transpiling imageLoader.js for next.config.js to Image optimization
   - imageLoader.js (
-     Traspiled from typescript to javascript file, so next.config.js can read it for 
-     for allowing image optimisation to work with nextjs for external api calls)
-4. From root of this repo: `sh _create.sh`
+     Transpiled from typescript to javascript file, so next.config.js can read it for 
+     for allowing image optimization to work with nextjs for external api calls)
+4. `cd ../ && sh _create.sh`  
 5. Load in browser
 localhost:3000
 
 
 # debug
-- dist/*.log
+- vlm_share/*.log
 - docker-nextjs-server/compose.yaml - uncomment cmd commands to test server.
 
 # Disclaimer

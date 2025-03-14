@@ -3,18 +3,25 @@ services:
     container_name: docker-wolfi-nextjs-s3
     user: "${USER_ID}:${USER_ID}"  
 
-    command: ["sh", "-c", "node ./node_modules/pm2/lib/binaries/CLI.js start ecosystem.config.js"]
+    #command: ["sh","-c","./scripts/pm2.sh start ecosystem.config.js"]
     # debug
-    # command: ["sh", "-c", "node ./node_modules/pm2/lib/binaries/CLI.js start ecosystem.config.js --no-daemon"]
+    command: ["sh","-c","./scripts/pm2.sh start ecosystem.config.cjs --no-daemon"]
     # command: ["node", "next-server.js"]
     image: "docker-wolfi-nextjs-s3"
     build:
       context: .
       args:
-        - PORT=$PORT
-        - CONTAINER_SHARED_PATH=${CONTAINER_SHARED_PATH}
         - USER_ID=${USER_ID}
+        - PORT=$PORT
     volumes:
-      - ${PWD}/../${CONTAINER_SHARED_PATH}:/app/${CONTAINER_SHARED_PATH}
+      - ${PWD}/../${VLM_DIR}:/app/${VLM_DIR}
     ports:
       - "$PORT:$PORT"
+    environment:
+      - ROOT=${ROOT}
+      - VLM_DIR=${VLM_DIR}
+      - PM2_SERVER_NAME=${PM2_SERVER_NAME}
+      - BLGREEN_SYNCED=${BLGREEN_SYNCED}
+      - BLGREEN_BUILD1=${BLGREEN_BUILD1}
+      - BLGREEN_BUILD2=${BLGREEN_BUILD2}
+
