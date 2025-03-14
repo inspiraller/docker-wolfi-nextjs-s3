@@ -1,5 +1,12 @@
 #!/bin/sh
 
+# healthcheck.sh
+# This will check if the file: healthcheck-init exists.
+# If it does not exist, it will create the file and write the timestamp to it and send a logof "init" to Cloudwatch
+# If it does not exist, it will send a log of "still ok" vto Cloudwatch
+# We can subscripe to the Cloudwatch log to invoke a lambda in a ci chain on deployments or other services.
+
+
 log() {
   echo $1 >> /proc/1/fd/1
 }
@@ -13,10 +20,6 @@ createFile() {
   echo $1 > $2
 }
 
-# This will check if the file: healthcheck-init exists.
-# If it does not exist, it will create the file and write the timestamp to it and send a logof "init" to Cloudwatch
-# If it does not exist, it will send a log of "still ok" vto Cloudwatch
-# We can subscripe to the Cloudwatch log to invoke a lambda in a ci chain on deployments or other services.
 
 getHealthLog() {
   log "healthcheck: test"

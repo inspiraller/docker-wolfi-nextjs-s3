@@ -1,19 +1,23 @@
-
-
-// from Dockerfile environment variable
-const {PORT, VLM_DIR, BLGREEN_SYMLINK, PM2_SERVER_NAME } = process.env;
 const path = require('path');
 
+// from Dockerfile environment variable
+const {PORT, VLM_DIR, PM2_SERVER_NAME, BLGREEN_SYNCED } = process.env;
+
+// import path, {dirname} from "path";
+// import { fileURLToPath } from "url";
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = dirname(__filename);
 
 const ROOT_VLM_DIR=path.join(`${__dirname}/${VLM_DIR}`)
 
-console.log('ecosystem.config.js PORT=',{ PM2_SERVER_NAME, PORT, VLM_DIR, BLGREEN_SYMLINK, ROOT_VLM_DIR, __dirname });
+console.log('ecosystem.config.js PORT=',{ PM2_SERVER_NAME, BLGREEN_SYNCED, PORT, VLM_DIR, ROOT_VLM_DIR, __dirname });
 
 module.exports = {
+//export default {
   apps: [
     {
       name: PM2_SERVER_NAME,
-      script: "./next-server.js",
+      script: "./next-server.cjs",
       instances: "1",
       exec_mode: "fork",
       max_memory_restart: "300M",
@@ -25,8 +29,8 @@ module.exports = {
       env_production: {
         NODE_ENV: "production",
         PORT,
-        BLGREEN_SYMLINK,
-        VLM_DIR
+        VLM_DIR,
+        BLGREEN_SYNCED
       },
       wait_ready: true,
       //listen_timeout: 0, // No timeout, wait indefinitely

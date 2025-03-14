@@ -19,7 +19,6 @@ ENV VLM_DIR=
 ENV BLGREEN_SYNCED=
 ENV BLGREEN_BUILD1=
 ENV BLGREEN_BUILD2=
-ENV BLGREEN_SYMLINK=
 ENV ROOT= 
 ENV PM2_SERVER_NAME=
 
@@ -27,7 +26,7 @@ ENV PM2_SERVER_NAME=
 # inotify-tools for watching /states/uploaded to trigger rebuild 
 # Note: This is problematic when used in Dockerfile. Currently using a poll, but in ec2 instance can use inotify-tools
 RUN apk update && apk add --no-cache \
- nodejs-20 npm shadow curl dumb-init inotify-tools && \
+ nodejs-20 npm shadow curl dumb-init && \
  rm -rf /var/cache/apk/*
 RUN groupadd -g $USER_ID node && useradd -m -u $USER_ID -g node -s /bin/sh node
 

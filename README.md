@@ -1,57 +1,54 @@
-# What is this repo for? - partial blue green deployment
-If you have an existing custom nextjs server and you want to deploy new content changes (excluding package.json dependencies), then this is a blue green deployment solution within same ec2/ecs container. It's fast, reduces downtime, reduces transport of new data and focuses just on alternating between old and new folder by way of a symlink on detecting a file states/uploaded changes.
+# What is this repo for? - Blue Green deployment for incremental updates
+This is part of a chain of steps to implement an incremental blue green deployment of nextjs content.
 
-# What this repo can't do? - complete blue green deployment
-This is not a complete blue green deployment implementation, because if you want to update any package dependencies then you'd also have to update the custom next server package dependencies as well. 
+## If we have the following setup:
+- vpn, subnets, security groups
+- ec2
+- Docker image push to ecr
+- Task definition configured to use Docker image
+- S3 which contain the content for latest nextjs build (not standalone. Can be standalone but this shows how to make it work with custom server)
+- S3 notification to triger Lambda 1 (lambda-listen-s3)
+- EFS mount
+  - sync folder
+  - build 1 folder
+  - build 2 folder
+- Lambda (lambda-listen-s3) 
+  - alternates blue green deployment build to either build 1 or build 2 and syncs to efs
+- Cloudwatch log group on ecs task
+- Cloudwatch log group subscription - triggers Lambda (healthcheck ok)
+- Lambda (healthcheck ok) 
+  - updates target group listener to new green deployment 
+  -  kills old service
+  - removes build file from efs
+- Route 53 - hosting zone - dns record - Load balancer dns name
+- Load balancer - target group pointing to ecs service
 
-## There are several options for complete blue green deployment:
-1. **Don't use custom nextjs server. Use standalone output.**
-Have a persistent node server running to keep the ecs task live, and just alternate the new standalone server with old one and expose on necessary port.
-We'd have to increase the ec2 capacity to hold 2 running servers at a time. 
+## How blue greend deployment works with incremental changes?
+Existing ecs task uses build 1 folder for server content
 
-This is the simplest solution
-
-2. **Keep the custom nextjs server. Install npm packages in situ**
-Detect new dependencies and install those in situ on the ecs task in separate folder. Alternate the build in blue green deployment.
-
-**Problems:**
-- We'd have to ensure npm is available on ecs, increasing the dependencies on our nice restrictive Chainguard Wolfi base image which shouldn't be allowing npm to run. 
-- We'd still have to update the ECR docker image, task definition, lambdas which depend on the task definition and ensure consistency between blue green installation in situ, adding complexity synchronization risk.
-We need to increase capacity of ec2 instance to allow npm and future installation.
-We'd have to increase the ec2 capacity to hold 2 running servers at a time. 
-
-3. **Keep the custom nextjs server. Duplicate everything - ec2, ecs, loadbalancer and alternate dns record between blue green**
-Detect new dependencies and install those in situ on the ecs task in separate folder. Alternate the build in blue green deployment.
-
-This is a complex solution, but the advantage is it completely separates and encapsulates the blue green deployment implementation and makes it more reliable for reverting. 
-
-It also is pretty much needed for all other server types anyway. 
-
-# So why this repo and not just implement complete solution? 
-The only reason for this repo (partial blue green deployment) is to speed up content changes without having the overhead of the entire architecture when we only need to change content. 
+**On blue green deployment**:
+- Local computer - aws cli sync local nextjs build to s3
+- local computer - after sync cps file states/uploaded to trigger lambda
+- s3 notification - on file states/uploaded invokes lambda 1
+- Lambda 1 - syncs s3 to efs sync folder with only new updates
+- Cloudwatch log on efs triggers lambda 2 when it detects file states/uploaded
+- Lambda 2 - Update service with new task (to be green)
+- New ecs task - mounts to efs listens on sync folder for file /uploaded on first load only then copies sync to empty build folder: build 1 or build 2 (alternating blue green) then uses new build and starts server from it. (Ecs task is using Docker image to run in a suspended state with bash or node, to listen to updates in efs, and then start up server entirely, ie not having nextjs start up on initialisation)
+- Task def Healthcheck - As per standard new deployments. On healthcheck ok of new service, loadbalancer stops old ecs task, but in addition, removes data from old folder in efs build!
+- Cloudwatch - on healthcheck ok. Loadbalancer stops old ecs task (removing data from old folder in efs build)
 
 # How it would work with AWS?
-1. myComputer create nextjs-build --(s3 sync)--> s3
+1. myComputer script (or pipeline)
+- create nextjs-build 
+-  --(s3 sync)--> s3
+- --(s3 cp states/uploaded)--> s3
+
 2. S3 update --(Notification subscription)--> lambda listen s3
-3. Lambda listen s3 --(sms message)--> ec2 local script.sh 
-4. ec2 local script.sh --(s3 sync bucket )--> ec2/ecs shared volume
-5. inotifywait or poll --(listen on file states/uploaded)--> alternate between new folder and old folder for blue green deployment
+3. Lambda listen s3 --(syncs s3)--> to efs inactive build folder and creates file build with reference to the new build folder.
+4. Cloudwatch --(listens on efs file - build) --> lambda healthcheck ok
+5. Lambda healthcheck ok --(Update listener desired tasks)--> start service
+6. This repo expects the file 'build' and a reference to the target build folder to start nextjs server
 
-# Aws services
-The use case for this is running the following:
-- 1 ec2 instance (with AWS cli for s3 sync for pulling changes from s3 bucket to the shared volume)
-- 1 ecs service task
-(share volume between ec2 and ecs, using volume mount on task definition)
-- 1 s3 bucket
-- 1 notification subscription to lambda
-- 1 lambda (listen to s3)
-- Cloudwatch log groups for debugging
-- Optional: Loadbalancer + EC2 Nat Instance 
-Note: If using loadbalancer then you need task definition network mode: AWSVPC which puts the ecs tasks into private subnet that can't access the internet, so you can't make external api calls unless you have a NAT instance or NAT gateway.
-
-# Larger scale deployments
-For larger scale, more capacity it is advisable instead to use separate ec2 instances. 
-One solution might be to alternate the dns record to point to the new ec2 instance load balancer, but that is outside the scope of this repo.
 
 # Dependencies on host:
 - Gitbash terminal
@@ -66,10 +63,9 @@ One solution might be to alternate the dns record to point to the new ec2 instan
 - shadow (for changing your user id to share with volume from container to host with explicit permissions using chmod/chown)
 - dumb-init (for running nodejs in entrypoint without npm. Part of the Chainguard principles is to improve security)
 - pm2 for production, debugging and restarting
-- inotifywait
 - healthcheck
 - entrypoint for any custom functionality before the compose.yaml or task definition runs
-- Bind mount nextjs-build into /vlm_share/build0
+- Bind mount nextjs-build into /vlm_share/build[1 or 2]
   - public/
   - .next/
   - states/uploaded (for nodejs to listen when to start server)
@@ -93,11 +89,6 @@ Yes. This is just an architectural blueprint of the entire chain. You can test t
 4. `cd ../ && sh _create.sh`  
 5. Load in browser
 localhost:3000
-
-# How to redeploy - to test blue green depllyment
-1. Modify docker-nextjs-app/nextjs-app (without changing package.json)
-2. `cd ../ && sh _update.sh`
-3. reload browser: localhost:3000
 
 
 # debug
